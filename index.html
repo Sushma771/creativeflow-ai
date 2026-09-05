@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BriefFlow — brief to pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12141A;
+    --panel: #191C24;
+    --panel-2: #1F232E;
+    --border: #2A2E3A;
+    --text: #F2F1ED;
+    --text-dim: #9498A8;
+    --text-faint: #676C7C;
+    --accent: #E8A33D;
+    --accent-dim: #7A5A2A;
+    --danger: #E8636B;
+    --good: #4CC38A;
+
+    --c-brief_input: #7C8291;
+    --c-image_gen: #4C7CF3;
+    --c-video_gen: #8B5CF6;
+    --c-color_grade: #E8A33D;
+    --c-audio_gen: #2FB6A8;
+    --c-voiceover: #2F9BB6;
+    --c-text_overlay: #E85D9A;
+    --c-assemble_export: #34B37A;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--accent); color:#1a1200; }
+  button, input, textarea{ font-family: inherit; }
+  textarea, input{ background: none; border: none; color: inherit; }
+  button{ cursor:pointer; }
+  button:disabled{ cursor: not-allowed; opacity: 0.5; }
+  :focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .mono{ font-family: 'IBM Plex Mono', monospace; }
+
+  #app{
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: 100vh;
+    min-height: 560px;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 20px;
+    overflow-y: auto;
+    gap: 20px;
+  }
+  .brand{ display:flex; flex-direction:column; gap:4px; margin-bottom: 4px; }
+  .brand-mark{
+    display:flex; align-items:center; gap:9px;
+  }
+  .brand-mark .dot{
+    width:11px; height:11px; border-radius:2px;
+    background: linear-gradient(135deg, var(--accent), #b97a1e);
+    flex-shrink:0;
+  }
+  .brand-mark h1{ font-size: 19px; margin:0; font-weight:700; letter-spacing: -0.01em; }
+  .brand p{ margin:0; font-size: 12.5px; color: var(--text-dim); line-height:1.5; }
+
+  .field-label{
+    font-size: 11.5px; color: var(--text-dim); margin-bottom: 8px; display:block;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  .brief-box{
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    transition: border-color 0.15s;
+  }
+  .brief-box:focus-within{ border-color: var(--accent); }
+  #briefInput{
+    width:100%; resize: vertical; min-height: 84px; font-size: 13.5px;
+    line-height: 1.5; color: var(--text);
+  }
+  #briefInput::placeholder{ color: var(--text-faint); }
+
+  .presets{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .preset-chip{
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 11.5px; padding: 5px 9px; border-radius: 20px; transition: all 0.15s;
+  }
+  .preset-chip:hover{ border-color: var(--accent); color: var(--text); }
+
+  .btn-primary{
+    background: var(--accent); color: #1c1300; border:none; border-radius:8px;
+    padding: 11px 14px; font-weight:600; font-size:13.5px; width:100%;
+    margin-top: 12px; transition: filter 0.15s, transform 0.1s;
+  }
+  .btn-primary:hover:not(:disabled){ filter: brightness(1.08); }
+  .btn-primary:active:not(:disabled){ transform: translateY(1px); }
+
+  .divider{ height:1px; background: var(--border); border:none; margin:2px 0; }
+
+  .log{
+    flex:1; min-height: 90px; max-height: 220px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:6px;
+    font-size: 12px; padding-right: 4px;
+  }
+  .log-line{ color: var(--text-dim); line-height:1.5; }
+  .log-line.ok{ color: var(--good); }
+  .log-line.err{ color: var(--danger); }
+  .log-line.warn{ color: var(--accent); }
+  .log-empty{ color: var(--text-faint); font-style: normal; }
+
+  .refine-row{ display:flex; gap:6px; }
+  #refineInput{
+    flex:1; background: var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    padding: 9px 11px; font-size: 13px; color: var(--text);
+  }
+  #refineInput::placeholder{ color: var(--text-faint); }
+  #refineInput:focus{ border-color: var(--accent); }
+  .btn-secondary{
+    background: var(--panel-2); border:1px solid var(--border); color: var(--text);
+    border-radius:8px; padding: 9px 13px; font-size:13px; font-weight:600;
+    white-space:nowrap;
+  }
+  .btn-secondary:hover:not(:disabled){ border-color: var(--accent); }
+
+  .sidebar-foot{
+    margin-top: auto; display:flex; align-items:center; justify-content:space-between;
+    padding-top: 8px;
+  }
+  .foot-note{ font-size:11px; color: var(--text-faint); }
+  .icon-btn{
+    background:none; border:1px solid var(--border); color: var(--text-dim);
+    width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ border-color: var(--accent); color: var(--text); }
+
+  .settings-panel{
+    display:none; background: var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    padding:12px; margin-top:8px; font-size:12px; color: var(--text-dim); gap:8px; flex-direction:column;
+  }
+  .settings-panel.open{ display:flex; }
+  .settings-panel input{
+    background: var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 9px;
+    color: var(--text); font-size:12.5px; width:100%;
+  }
+
+  /* ---------- Main canvas ---------- */
+  .main{ display:flex; flex-direction:column; min-width:0; height:100vh; }
+  .canvas-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 26px; border-bottom:1px solid var(--border); flex-shrink:0; gap:16px;
+  }
+  .canvas-title h2{ margin:0; font-size:17px; font-weight:600; }
+  .canvas-title p{ margin: 2px 0 0; font-size:12.5px; color: var(--text-dim); }
+  .canvas-header .actions{ display:flex; gap:8px; flex-shrink:0; }
+
+  .canvas-scroll{ flex:1; overflow:auto; position:relative; }
+  .canvas-inner{ position:relative; width:max-content; min-width:100%; min-height:100%; }
+  svg.edges{ position:absolute; top:0; left:0; pointer-events:none; z-index:1; overflow:visible; }
+
+  .columns{ position:relative; z-index:2; display:flex; gap:64px; padding: 40px 48px 60px; }
+  .column{ display:flex; flex-direction:column; gap:26px; width:260px; flex-shrink:0; }
+  .stage-label{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--text-faint);
+    margin-bottom: -10px;
+  }
+
+  .empty-state{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; text-align:center; gap:8px; padding: 40px; z-index:0;
+  }
+  .empty-state h3{ margin:0; font-size:16px; color: var(--text); }
+  .empty-state p{ margin:0; font-size:13px; color: var(--text-dim); max-width: 340px; line-height:1.6; }
+
+  /* Node card */
+  .node{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow:hidden;
+    opacity:0; transform: translateY(6px);
+    animation: nodeIn 0.36s ease forwards;
+    position:relative;
+  }
+  @keyframes nodeIn{ to{ opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){
+    .node{ animation:none; opacity:1; transform:none; }
+  }
+  .node-head{
+    display:flex; align-items:center; gap:7px; padding: 9px 12px;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--accent-node, var(--accent));
+  }
+  .node-icon{ width:15px; height:15px; color: var(--accent-node, var(--accent)); flex-shrink:0; display:flex; }
+  .node-icon svg{ width:100%; height:100%; }
+  .node-type{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color: var(--text-dim); letter-spacing:0.02em; }
+
+  .node-body{ padding: 12px; display:flex; flex-direction:column; gap:9px; }
+  .node-title{ font-size:13.5px; font-weight:600; }
+  .node-prompt{
+    width:100%; resize:none; overflow:hidden; font-size:12.5px; line-height:1.5;
+    color: var(--text-dim); border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border);
+    padding: 7px 0; background:none;
+  }
+  .node-prompt:focus{ color: var(--text); }
+  .node-chips{ display:flex; flex-wrap:wrap; gap:5px; }
+  .chip{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; color: var(--text-dim);
+    background: var(--panel-2); border: 1px solid var(--border); padding: 3px 7px; border-radius: 4px;
+  }
+  .node-swatch{
+    height: 44px; margin: 0 12px 12px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent-node, var(--accent)), color-mix(in srgb, var(--accent-node, var(--accent)) 45%, black));
+    display:flex; align-items:center; justify-content:center; opacity:0.85;
+  }
+  .node-swatch svg{ width:18px; height:18px; color: rgba(0,0,0,0.35); }
+  .node-foot{ padding: 0 12px 12px; }
+  .node-regen{
+    width:100%; background:none; border:1px solid var(--border); color: var(--text-dim);
+    font-size: 11.5px; padding: 7px; border-radius:6px; font-weight:500;
+  }
+  .node-regen:hover:not(:disabled){ border-color: var(--accent-node, var(--accent)); color: var(--text); }
+  .node.busy{ opacity: 0.6; }
+
+  path.edge{
+    fill:none; stroke: var(--border); stroke-width: 1.6;
+    stroke-dasharray: 400; stroke-dashoffset: 400;
+    animation: draw 0.5s ease forwards;
+  }
+  @media (prefers-reduced-motion: reduce){
+    path.edge{ animation:none; stroke-dashoffset:0; }
+  }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+
+  /* About panel */
+  .about-overlay{
+    position:fixed; inset:0; background: rgba(10,11,15,0.7); display:none;
+    align-items:center; justify-content:center; z-index: 50; padding: 24px;
+  }
+  .about-overlay.open{ display:flex; }
+  .about-card{
+    background: var(--panel); border:1px solid var(--border); border-radius: 12px;
+    max-width: 560px; width:100%; padding: 26px; max-height: 82vh; overflow-y:auto;
+  }
+  .about-card h3{ margin:0 0 12px; font-size:17px; }
+  .about-card p{ font-size: 13.5px; line-height:1.65; color: var(--text-dim); margin: 0 0 12px; }
+  .about-card .tag{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--accent);
+    margin-bottom: 14px; display:block;
+  }
+  .about-close{
+    background: var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding: 8px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-top:6px;
+  }
+
+  @media (max-width: 860px){
+    #app{ grid-template-columns: 1fr; grid-template-rows: auto 1fr; height:auto; min-height:100vh; }
+    .sidebar{ max-height: 46vh; border-right:none; border-bottom:1px solid var(--border); }
+    .main{ height: auto; min-height: 54vh; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><span class="dot"></span><h1>BriefFlow</h1></div>
+      <p>An agent that plans your shoot, not just your prompt. Describe what you're making — it lays out the pipeline as editable nodes.</p>
+    </div>
+
+    <div>
+      <span class="field-label">CREATIVE BRIEF</span>
+      <div class="brief-box">
+        <textarea id="briefInput" placeholder="Describe what you're making — format, audience, mood, brand details..."></textarea>
+        <div class="presets" id="presets"></div>
+      </div>
+      <button class="btn-primary" id="generateBtn">Lay out the pipeline</button>
+    </div>
+
+    <hr class="divider">
+
+    <div style="display:flex; flex-direction:column; flex:1; min-height:0;">
+      <span class="field-label">AGENT LOG</span>
+      <div class="log" id="log"><div class="log-line log-empty">Waiting for a brief.</div></div>
+    </div>
+
+    <div>
+      <span class="field-label">REFINE WITH THE AGENT</span>
+      <div class="refine-row">
+        <input id="refineInput" type="text" placeholder="'Add a slow-motion shot', 'make it warmer'..." disabled>
+        <button class="btn-secondary" id="refineBtn" disabled>Update</button>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <span class="foot-note">Nodes are placeholders — planning is real.</span>
+      <button class="icon-btn" id="settingsToggle" title="API key settings" aria-label="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+    </div>
+    <div class="settings-panel" id="settingsPanel">
+      <span>Running this outside Claude? Add your own Anthropic API key to power the agent. Kept in memory for this tab only — never saved or sent anywhere else.</span>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+      <button class="btn-secondary" id="saveKeyBtn">Save for this session</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="canvas-header">
+      <div class="canvas-title">
+        <h2 id="workflowTitle">No pipeline yet</h2>
+        <p id="workflowSubtitle">Write a brief on the left to get started.</p>
+      </div>
+      <div class="actions">
+        <button class="btn-secondary" id="exampleBtn">See an example</button>
+        <button class="btn-secondary" id="exportBtn" disabled>Export pipeline</button>
+        <button class="icon-btn" id="aboutToggle" title="Why this" aria-label="Why this">?</button>
+      </div>
+    </div>
+    <div class="canvas-scroll" id="canvasScroll">
+      <div class="empty-state" id="emptyState">
+        <h3>Nothing on the bench yet</h3>
+        <p>Describe the piece you're making on the left. The agent breaks it into a pipeline of nodes you can edit before anything renders.</p>
+      </div>
+      <div class="canvas-inner" id="canvasInner" style="display:none;">
+        <svg class="edges" id="edgesSvg"></svg>
+        <div class="columns" id="columns"></div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<div class="about-overlay" id="aboutOverlay">
+  <div class="about-card">
+    <span class="tag">WHY THIS EXISTS</span>
+    <h3>The seam between chat and canvas</h3>
+    <p>Most AI tools for creative teams are either a single chat box, or a blank node canvas you have to build yourself. HexCoded is building both at once — agentic chat and node-based workflows in Creative Studio. BriefFlow is the seam between them: an agent that reads a brief the way a creative director would, and lays it out as an editable pipeline before a single frame renders. Every step — shot, grade, voice, export — stays a real node you can rewrite, reorder, or hand to someone else.</p>
+    <p>Magnific pushes single-image quality. ImagineArt and OpenArt cover broad generation and template libraries. LTX Studio takes a script to a shot-by-shot film. BriefFlow's job is narrower and, I think, still missing: turn the plain-English ask that agencies and editors actually get from clients into the pipeline a node canvas already knows how to run.</p>
+    <p>This is a prototype: node previews are placeholder gradients, not real renders. The planning and rewriting is real, wired to Claude live. Swapping in HexCoded's own generation nodes — image, video, voice, grade — is the natural next step.</p>
+    <button class="about-close" id="aboutClose">Close</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var TYPE_META = {
+    brief_input:    { label:'BRIEF',   color:'var(--c-brief_input)',    icon: icon('doc') },
+    image_gen:      { label:'IMAGE',   color:'var(--c-image_gen)',      icon: icon('image') },
+    video_gen:      { label:'VIDEO',   color:'var(--c-video_gen)',      icon: icon('film') },
+    color_grade:    { label:'GRADE',   color:'var(--c-color_grade)',    icon: icon('sliders') },
+    audio_gen:      { label:'AUDIO',   color:'var(--c-audio_gen)',      icon: icon('wave') },
+    voiceover:      { label:'VOICE',   color:'var(--c-voiceover)',      icon: icon('mic') },
+    text_overlay:   { label:'TEXT',    color:'var(--c-text_overlay)',   icon: icon('type') },
+    assemble_export:{ label:'EXPORT',  color:'var(--c-assemble_export)',icon: icon('export') },
+    default:        { label:'STEP',    color:'var(--c-brief_input)',    icon: icon('doc') }
+  };
+
+  function icon(name){
+    var paths = {
+      doc:   '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/>',
+      image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-4 4-2-2-6 6"/>',
+      film:  '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5"/>',
+      sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="20" cy="14" r="2"/>',
+      wave:  '<path d="M3 12h2l2-7 3 14 3-11 3 8 2-4h3"/>',
+      mic:   '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3"/>',
+      type:  '<path d="M4 5h16M12 5v14M9 19h6"/>',
+      export:'<path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M4 17v3a1 1 0 001 1h14a1 1 0 001-1v-3"/>'
+    };
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(paths[name]||paths.doc)+'</svg>';
+  }
+
+  var SYSTEM_DECOMPOSE = [
+    "You are the planning engine inside a node-based AI creative pipeline tool for video, image and audio production, used by editors, designers, filmmakers, agencies and content teams.",
+    "Given a plain-English creative brief, output a production pipeline as a directed graph of nodes.",
+    "Respond with ONLY a JSON object. No markdown fences. No commentary. No text before or after. Match exactly this shape:",
+    '{"title":"short workflow title","format":"e.g. 15s vertical reel / 6-image product set / 30s ad","nodes":[{"id":"n1","type":"brief_input|image_gen|video_gen|color_grade|audio_gen|voiceover|text_overlay|assemble_export","label":"short node name","prompt":"the actual generation or edit instruction for this node, specific to the brief","params":{"key":"value"}}],"edges":[{"from":"n1","to":"n2"}]}',
+    "Rules:",
+    "- 4 to 8 nodes total. Always exactly one brief_input node (id n1) that summarizes the brief. Always exactly one assemble_export node, last in the pipeline.",
+    "- Build a real pipeline shape for the brief: a video brief typically needs image_gen (per shot) -> video_gen (animate) -> color_grade -> audio_gen and/or voiceover -> assemble_export. A stills-only brief may skip video_gen and audio_gen.",
+    "- If the brief implies multiple shots or scenes, create one image_gen node (and video_gen node if animated) per shot, each with a distinct and specific prompt naming that shot.",
+    "- params holds 1-4 real production parameters relevant to that node (aspect ratio, duration, resolution, style, mood, voice tone, color palette, etc). Short values only.",
+    "- Every prompt must be concrete and specific to the brief, written the way a creative director would brief that exact step. Never generic.",
+    "- Output valid JSON only, nothing else."
+  ].join("\n");
+
+  var SYSTEM_REFINE = [
+    "You are the same planning engine, now revising an existing pipeline based on a note from the creative director.",
+    "You will receive the CURRENT PIPELINE as JSON and an INSTRUCTION describing what to change.",
+    "Return the full UPDATED pipeline as ONLY a JSON object in the exact same shape as the input (title, format, nodes, edges). No markdown fences, no commentary.",
+    "You may add, remove, reorder or rewrite nodes and edges as needed to satisfy the instruction, but keep exactly one brief_input node and exactly one assemble_export node (last in the pipeline).",
+    "Keep node ids stable for anything you are not changing. New nodes get new ids not already in use.",
+    "Output valid JSON only, nothing else."
+  ].join("\n");
+
+  var SYSTEM_NODE = [
+    "You are the planning engine for one step of a creative production pipeline.",
+    "You will receive the overall brief, the current pipeline for context, and the id of one node to rewrite.",
+    "Return ONLY a JSON object with a sharper version of that node: {\"label\":\"...\",\"prompt\":\"...\",\"params\":{\"key\":\"value\"}}.",
+    "Make the prompt more specific and production-ready, consistent with the brief and the neighboring steps. Keep params short, 1-4 entries.",
+    "Output valid JSON only, nothing else."
+  ].join("\n");
+
+  var EXAMPLE_GRAPH = {
+    title: "Sneaker launch — 15s vertical reel",
+    format: "15s vertical reel, 9:16",
+    nodes: [
+      { id:"n1", type:"brief_input", label:"Brief", prompt:"15s Instagram/TikTok reel for a sneaker launch, moody urban night vibe, 3 shots, brand color #FF4500.", params:{ ratio:"9:16", length:"15s" } },
+      { id:"n2", type:"image_gen", label:"Shot 1 — hero", prompt:"Wet asphalt street at night, single sneaker lit by a warm streetlamp, shallow depth of field, brand orange rim light.", params:{ style:"cinematic", ratio:"9:16" } },
+      { id:"n3", type:"image_gen", label:"Shot 2 — motion", prompt:"Low angle of a sneaker mid-stride through a puddle reflecting neon signage, motion blur on background.", params:{ style:"cinematic", ratio:"9:16" } },
+      { id:"n4", type:"image_gen", label:"Shot 3 — detail", prompt:"Macro shot of stitching and sole texture, dramatic side light, brand orange accent glow.", params:{ style:"macro", ratio:"9:16" } },
+      { id:"n5", type:"video_gen", label:"Animate shots", prompt:"Animate all three shots with subtle parallax and a slow push-in, 2.5s each, match cut on motion.", params:{ duration:"7.5s", motion:"slow push-in" } },
+      { id:"n6", type:"color_grade", label:"Grade", prompt:"Teal-and-orange night grade, lift blacks slightly, protect brand orange as the only warm accent.", params:{ mood:"moody urban" } },
+      { id:"n7", type:"audio_gen", label:"Sound bed", prompt:"Dark minimal bass pulse with a rising riser into the logo card, no vocals.", params:{ length:"15s" } },
+      { id:"n8", type:"assemble_export", label:"Assemble & export", prompt:"Cut shots to the beat, hold logo card for final 1.5s, export vertical master.", params:{ ratio:"9:16", format:"mp4" } }
+    ],
+    edges: [
+      {from:"n1", to:"n2"}, {from:"n1", to:"n3"}, {from:"n1", to:"n4"},
+      {from:"n2", to:"n5"}, {from:"n3", to:"n5"}, {from:"n4", to:"n5"},
+      {from:"n5", to:"n6"}, {from:"n6", to:"n7"}, {from:"n7", to:"n8"}
+    ]
+  };
+
+  var PRESETS = [
+    "15s vertical reel for a sneaker launch, moody urban night vibe, 3 shots, brand color #FF4500",
+    "6-shot product set for e-commerce, clean studio white background, soft shadow, brand blue accents",
+    "Instagram carousel announcing a restaurant opening, warm inviting mood, 5 slides",
+    "30s explainer video with voiceover for a budgeting app, friendly and clear, light background"
+  ];
+
+  var state = { graph:null, apiKey:null, busy:false };
+
+  var els = {
+    briefInput: document.getElementById('briefInput'),
+    presets: document.getElementById('presets'),
+    generateBtn: document.getElementById('generateBtn'),
+    log: document.getElementById('log'),
+    refineInput: document.getElementById('refineInput'),
+    refineBtn: document.getElementById('refineBtn'),
+    settingsToggle: document.getElementById('settingsToggle'),
+    settingsPanel: document.getElementById('settingsPanel'),
+    apiKeyInput: document.getElementById('apiKeyInput'),
+    saveKeyBtn: document.getElementById('saveKeyBtn'),
+    workflowTitle: document.getElementById('workflowTitle'),
+    workflowSubtitle: document.getElementById('workflowSubtitle'),
+    exampleBtn: document.getElementById('exampleBtn'),
+    exportBtn: document.getElementById('exportBtn'),
+    aboutToggle: document.getElementById('aboutToggle'),
+    aboutOverlay: document.getElementById('aboutOverlay'),
+    aboutClose: document.getElementById('aboutClose'),
+    canvasScroll: document.getElementById('canvasScroll'),
+    emptyState: document.getElementById('emptyState'),
+    canvasInner: document.getElementById('canvasInner'),
+    edgesSvg: document.getElementById('edgesSvg'),
+    columns: document.getElementById('columns')
+  };
+
+  PRESETS.forEach(function(p){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset-chip';
+    b.textContent = p.length > 42 ? p.slice(0,42) + '…' : p;
+    b.title = p;
+    b.addEventListener('click', function(){ els.briefInput.value = p; els.briefInput.focus(); });
+    els.presets.appendChild(b);
+  });
+
+  function log(msg, kind){
+    var empty = els.log.querySelector('.log-empty');
+    if(empty) empty.remove();
+    var line = document.createElement('div');
+    line.className = 'log-line' + (kind ? ' ' + kind : '');
+    line.textContent = msg;
+    els.log.appendChild(line);
+    els.log.scrollTop = els.log.scrollHeight;
+  }
+
+  function setBusy(b){
+    state.busy = b;
+    els.generateBtn.disabled = b;
+    els.refineBtn.disabled = b || !state.graph;
+    els.generateBtn.textContent = b ? 'Working…' : 'Lay out the pipeline';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function extractJSON(text){
+    var start = text.indexOf('{');
+    var end = text.lastIndexOf('}');
+    if(start === -1 || end === -1) throw new Error('No JSON found in the response.');
+    return JSON.parse(text.slice(start, end + 1));
+  }
+
+  function validateGraph(g){
+    if(!g || !Array.isArray(g.nodes) || !g.nodes.length) throw new Error('Response had no nodes.');
+    if(!Array.isArray(g.edges)) g.edges = [];
+    g.nodes.forEach(function(n){
+      if(!n.id || !n.type || !n.prompt) throw new Error('A node was missing id, type or prompt.');
+      if(!n.params) n.params = {};
+    });
+  }
+
+  async function callClaude(system, userText){
+    var headers = { 'Content-Type': 'application/json' };
+    if(state.apiKey){
+      headers['x-api-key'] = state.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: system,
+        messages: [{ role:'user', content: userText }]
+      })
+    });
+    if(!res.ok){
+      var errText = '';
+      try{ errText = (await res.text()).slice(0,200); }catch(e){}
+      throw new Error('API error ' + res.status + (errText ? ': ' + errText : ''));
+    }
+    var data = await res.json();
+    var block = (data.content || []).find(function(b){ return b.type === 'text'; });
+    if(!block) throw new Error('No text in the response.');
+    return block.text;
+  }
+
+  function handleApiError(err){
+    log('Error: ' + err.message, 'err');
+    if(!state.apiKey){
+      log('Running this outside Claude? Add your Anthropic API key in Settings ⚙ and try again.', 'warn');
+      openSettings();
+    }
+  }
+
+  function openSettings(){ els.settingsPanel.classList.add('open'); }
+  els.settingsToggle.addEventListener('click', function(){
+    els.settingsPanel.classList.toggle('open');
+  });
+  els.saveKeyBtn.addEventListener('click', function(){
+    var v = els.apiKeyInput.value.trim();
+    if(v){ state.apiKey = v; log('API key set for this session.', 'ok'); els.settingsPanel.classList.remove('open'); }
+  });
+
+  els.aboutToggle.addEventListener('click', function(){ els.aboutOverlay.classList.add('open'); });
+  els.aboutClose.addEventListener('click', function(){ els.aboutOverlay.classList.remove('open'); });
+  els.aboutOverlay.addEventListener('click', function(e){ if(e.target === els.aboutOverlay) els.aboutOverlay.classList.remove('open'); });
+
+  els.exampleBtn.addEventListener('click', function(){
+    state.graph = JSON.parse(JSON.stringify(EXAMPLE_GRAPH));
+    log('Loaded the example pipeline (not from the agent).', 'warn');
+    render();
+  });
+
+  els.exportBtn.addEventListener('click', function(){
+    if(!state.graph) return;
+    var blob = new Blob([JSON.stringify(state.graph, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (state.graph.title || 'workflow').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,60) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  els.generateBtn.addEventListener('click', generateWorkflow);
+  els.briefInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generateWorkflow();
+  });
+  els.refineBtn.addEventListener('click', refineWorkflow);
+  els.refineInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') refineWorkflow();
+  });
+
+  async function generateWorkflow(){
+    var brief = els.briefInput.value.trim();
+    if(!brief){ log('Add a brief first.', 'warn'); return; }
+    if(state.busy) return;
+    setBusy(true);
+    log('Reading the brief…');
+    try{
+      var raw = await callClaude(SYSTEM_DECOMPOSE, brief);
+      var graph = extractJSON(raw);
+      validateGraph(graph);
+      state.graph = graph;
+      log('Laid out ' + graph.nodes.length + ' nodes across the pipeline.', 'ok');
+      render();
+    }catch(err){
+      handleApiError(err);
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function refineWorkflow(){
+    var instruction = els.refineInput.value.trim();
+    if(!instruction || !state.graph || state.busy) return;
+    setBusy(true);
+    log('Updating: "' + instruction + '"');
+    try{
+      var userText = 'CURRENT PIPELINE:\n' + JSON.stringify(state.graph) + '\n\nINSTRUCTION: ' + instruction;
+      var raw = await callClaude(SYSTEM_REFINE, userText);
+      var graph = extractJSON(raw);
+      validateGraph(graph);
+      state.graph = graph;
+      els.refineInput.value = '';
+      log('Pipeline updated — ' + graph.nodes.length + ' nodes.', 'ok');
+      render();
+    }catch(err){
+      handleApiError(err);
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function regenerateNode(id){
+    if(!state.graph || state.busy) return;
+    var node = state.graph.nodes.find(function(n){ return n.id === id; });
+    if(!node) return;
+    var card = els.columns.querySelector('.node[data-id="' + id + '"]');
+    if(card) card.classList.add('busy');
+    log('Rewriting "' + (node.label || node.id) + '"…');
+    try{
+      var userText = 'BRIEF AND PIPELINE:\n' + JSON.stringify(state.graph) + '\n\nNODE TO REWRITE: ' + id;
+      var raw = await callClaude(SYSTEM_NODE, userText);
+      var updated = extractJSON(raw);
+      if(updated.label) node.label = updated.label;
+      if(updated.prompt) node.prompt = updated.prompt;
+      if(updated.params) node.params = updated.params;
+      log('Rewrote "' + node.label + '".', 'ok');
+      render();
+    }catch(err){
+      handleApiError(err);
+      if(card) card.classList.remove('busy');
+    }
+  }
+
+  function computeColumns(graph){
+    var col = {};
+    graph.nodes.forEach(function(n){ col[n.id] = 0; });
+    var changed = true, guard = 0;
+    while(changed && guard < 50){
+      changed = false; guard++;
+      graph.edges.forEach(function(e){
+        var c = (col[e.from] || 0) + 1;
+        if((col[e.to] || 0) < c){ col[e.to] = c; changed = true; }
+      });
+    }
+    return col;
+  }
+
+  function render(){
+    var graph = state.graph;
+    els.emptyState.style.display = 'none';
+    els.canvasInner.style.display = 'block';
+    els.exportBtn.disabled = false;
+    els.refineInput.disabled = false;
+    els.refineBtn.disabled = false;
+    els.workflowTitle.textContent = graph.title || 'Untitled pipeline';
+    els.workflowSubtitle.textContent = graph.format || (graph.nodes.length + ' nodes');
+
+    var col = computeColumns(graph);
+    var maxCol = 0;
+    Object.keys(col).forEach(function(k){ if(col[k] > maxCol) maxCol = col[k]; });
+    var cols = [];
+    for(var i=0;i<=maxCol;i++) cols.push([]);
+    graph.nodes.forEach(function(n){ cols[col[n.id]].push(n); });
+
+    els.columns.innerHTML = '';
+    cols.forEach(function(nodes, i){
+      var colEl = document.createElement('div');
+      colEl.className = 'column';
+      var label = document.createElement('div');
+      label.className = 'stage-label mono';
+      label.textContent = 'STAGE ' + (i+1);
+      colEl.appendChild(label);
+      nodes.forEach(function(n, idx){
+        var wrap = document.createElement('div');
+        wrap.innerHTML = nodeCard(n);
+        var cardEl = wrap.firstElementChild;
+        cardEl.style.animationDelay = (i * 90 + idx * 40) + 'ms';
+        colEl.appendChild(cardEl);
+      });
+      els.columns.appendChild(colEl);
+    });
+
+    // wire up interactions
+    els.columns.querySelectorAll('.node-prompt').forEach(function(ta){
+      autoGrow(ta);
+      ta.addEventListener('input', function(){
+        var n = graph.nodes.find(function(x){ return x.id === ta.dataset.id; });
+        if(n) n.prompt = ta.value;
+        autoGrow(ta);
+        scheduleDrawEdges();
+      });
+    });
+    els.columns.querySelectorAll('.node-regen').forEach(function(btn){
+      btn.addEventListener('click', function(){ regenerateNode(btn.dataset.id); });
+    });
+
+    requestAnimationFrame(function(){ requestAnimationFrame(drawEdges); });
+  }
+
+  function autoGrow(ta){
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
+  }
+
+  var drawPending = false;
+  function scheduleDrawEdges(){
+    if(drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(function(){ drawPending = false; drawEdges(); });
+  }
+  window.addEventListener('resize', scheduleDrawEdges);
+
+  function drawEdges(){
+    if(!state.graph) return;
+    var innerRect = els.canvasInner.getBoundingClientRect();
+    var width = els.canvasInner.scrollWidth;
+    var height = els.canvasInner.scrollHeight;
+    els.edgesSvg.setAttribute('width', width);
+    els.edgesSvg.setAttribute('height', height);
+    els.edgesSvg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    els.edgesSvg.innerHTML = '';
+
+    state.graph.edges.forEach(function(e){
+      var fromEl = els.columns.querySelector('.node[data-id="' + e.from + '"]');
+      var toEl = els.columns.querySelector('.node[data-id="' + e.to + '"]');
+      if(!fromEl || !toEl) return;
+      var fr = fromEl.getBoundingClientRect();
+      var tr = toEl.getBoundingClientRect();
+      var x1 = fr.right - innerRect.left;
+      var y1 = fr.top + fr.height/2 - innerRect.top;
+      var x2 = tr.left - innerRect.left;
+      var y2 = tr.top + tr.height/2 - innerRect.top;
+      var dx = Math.max(50, (x2 - x1) * 0.5);
+      var d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1+dx) + ' ' + y1 + ', ' + (x2-dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('class', 'edge');
+      els.edgesSvg.appendChild(path);
+    });
+  }
+
+  function nodeCard(node){
+    var meta = TYPE_META[node.type] || TYPE_META.default;
+    var chips = Object.keys(node.params || {}).map(function(k){
+      return '<span class="chip">' + escapeHtml(k) + ': ' + escapeHtml(String(node.params[k])) + '</span>';
+    }).join('');
+    return (
+      '<div class="node" data-id="' + escapeHtml(node.id) + '" style="--accent-node:' + meta.color + '">' +
+        '<div class="node-head">' +
+          '<span class="node-icon">' + meta.icon + '</span>' +
+          '<span class="node-type mono">' + meta.label + '</span>' +
+        '</div>' +
+        '<div class="node-body">' +
+          '<div class="node-title">' + escapeHtml(node.label || '') + '</div>' +
+          '<textarea class="node-prompt" data-id="' + escapeHtml(node.id) + '" rows="2">' + escapeHtml(node.prompt || '') + '</textarea>' +
+          '<div class="node-chips">' + chips + '</div>' +
+        '</div>' +
+        '<div class="node-swatch">' + meta.icon + '</div>' +
+        '<div class="node-foot">' +
+          '<button class="node-regen" data-id="' + escapeHtml(node.id) + '">Rewrite this step</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+})();
+</script>
+</body>
+</html>
